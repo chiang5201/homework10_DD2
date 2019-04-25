@@ -26,13 +26,13 @@ wire unknow, clk75, sysnc, reset;
 		.locked(unkonw)    //  locked.export
 	);
 assign reset=SW[9];	
-
-wire key00, key01, key02, key03;
-	keypressed button00(.clock(CLOCK_50), .reset(SW[9]), .enable_in(KEY[0]), .enable_out(key00));	
-	keypressed button01(.clock(CLOCK_50), .reset(SW[9]), .enable_in(KEY[1]), .enable_out(key01));
-	keypressed button02(.clock(CLOCK_50), .reset(SW[9]), .enable_in(KEY[2]), .enable_out(key02));
-	keypressed button03(.clock(CLOCK_50), .reset(SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
 /*	
+wire key00, key01, key02, key03;
+	keypressed button00(.clock(clk75), .reset(SW[9]), .enable_in(KEY[0]), .enable_out(key00));	
+	keypressed button01(.clock(clk75), .reset(SW[9]), .enable_in(KEY[1]), .enable_out(key01));
+	keypressed button02(.clock(clk75), .reset(SW[9]), .enable_in(KEY[2]), .enable_out(key02));
+	keypressed button03(.clock(clk75), .reset(SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
+
 reg Bg,ball;	
 	assign reset=~KEY[0];	
 always @ (posedge clk75)begin
@@ -80,10 +80,10 @@ show back_ground( .clk(clk75),
 			.px(px),
 		   .py(py),
 			.out(back),
-			.up(key02),
-			.down(key01),
-			.right(key00),
-			.left(key03),
+			.up(~KEY[1]),
+			.down(~KEY[2]),
+			.right(~KEY[0]),
+			.left(~KEY[3]),
 			.cursor(at)
 			);
 						
@@ -217,15 +217,15 @@ assign place=display;
 always @(posedge clk)begin
 if(reset)
  begin
- x=0;
- y=0;
- counter=0;
+ x<=0;//512;
+ y<=0;//384;
+ counter<=0;
  end
-else
+else if(px==1328 && py==805)
  begin
- x=nx;
- y=ny;
- counter=ncounter;
+ x<=nx;
+ y<=ny;
+ counter<=ncounter;
  end 
 							end
 always @(*) begin
@@ -235,7 +235,7 @@ ncounter=counter;
 display=0;
 if(left)
  begin
- if(x>0)
+ if(x>8)
 	begin
 		nx=x-8;
 		ncounter=counter-1;
@@ -243,7 +243,7 @@ if(left)
  end
 if(right)
  begin
- if(x<1024)
+ if(x<1016)
 	begin
 		nx=x+8;
 		ncounter=counter+1;
@@ -253,28 +253,25 @@ if(up)
  begin
  if(y>0)
 	begin
-		ny=y+16;
+		ny=y-16;
 		ncounter=counter-128;
 	end
  end
 if(down) 
  begin
- if(y<767)
+ if(y<751)
 	begin
-		ny=y-16;
+		ny=y+16;
 		ncounter=counter+128;
 	end
  end
  
-if(nx==px && py< ny+16)
+ 
+ 
+//if(nx==px )
+if(nx==px && py-ny <17) 
  display=1;
 				end
-
-
-
-
-
-
 
 endmodule
 //====================================================
