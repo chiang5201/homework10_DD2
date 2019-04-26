@@ -235,7 +235,7 @@ ncounter=counter;
 display=0;
 if(left)
  begin
- if(x>8)
+ if(x>0)
 	begin
 		nx=x-8;
 		ncounter=counter-1;
@@ -243,7 +243,7 @@ if(left)
  end
 if(right)
  begin
- if(x<1016)
+ if(x<1015)
 	begin
 		nx=x+8;
 		ncounter=counter+1;
@@ -267,9 +267,7 @@ if(down)
  end
  
  
- 
-//if(nx==px )
-if(nx==px && py-ny <17) 
+if(py-nx<9 && py-ny <17) 
  display=1;
 				end
 
