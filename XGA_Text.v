@@ -10,8 +10,10 @@ module XGA_Text(
     output wire       VGA_SYNC_N,
     output wire       VGA_HS,
     output wire       VGA_VS,
-	 input wire [9:0] SW
-										);
+	 input wire [9:0] SW,
+	 input wire PS2_DAT,
+	 input wire PS2_CLK,
+	 output [9:0] LEDR);
 
 	//---------- YOUR DESIGN STARTS HERE -----------------
 	// You can add code to this file, or add new verilog files.
@@ -55,7 +57,6 @@ assign VGA_CLK=clk75;
 assign VGA_SYNC_N = ~sysnc;
 wire[10:0] py,px;
 
-	
 vesasync pix00(
     .clk(clk75),             // 75 MHz clock
     .reset(reset),            // positive reset
@@ -75,7 +76,9 @@ mover_ball coloer( .clk(clk75),
 						.color(print));
 
 						
-show back_ground( .clk(clk75),
+show back_ground( 
+			.CLOCK_50(CLOCK_50),
+			.clk(clk75),
 			.reset(reset),
 			.px(px),
 		   .py(py),
@@ -85,7 +88,10 @@ show back_ground( .clk(clk75),
 			.down(~KEY[2]),
 			.right(~KEY[0]),
 			.left(~KEY[3]),
-			.cursor(at)
+			.cursor(at),
+			.PS2_DAT(PS2_DAT),
+			.PS2_CLK(PS2_CLK),
+			.LEDR(LEDR)
 			);
 						
 						
@@ -98,6 +104,7 @@ show back_ground( .clk(clk75),
 endmodule
 //===============================================
 module show(
+			input wire CLOCK_50,
 			input  wire clk,
 			input  wire reset,
 			input  wire [10:0] px,
@@ -108,7 +115,10 @@ module show(
 			 input  wire down,
 			 input  wire right,
 			 input  wire left,
-			output  wire cursor); 
+			output  wire cursor,
+			input wire PS2_DAT,
+			input wire PS2_CLK,
+			output wire [9:0] LEDR); 
 				
 wire unkonw;
 wire [6:0] B;	 
@@ -118,6 +128,22 @@ reg [10:0] val,Nval;
 wire outpix,cpix;
 assign out=outpix;
 assign cursor=cpix;
+
+//===========Logic to take keyboard codes and pass them to font rom=========
+wire scan_ready;
+wire [7:0] scan_code;
+keyboard_scancoderaw_driver keyboard_input(
+  CLOCK_50, 
+  KEY,
+  scan_ready, // 1 when a scan_code arrives from the inner driver
+  scan_code, // most recent byte scan_code
+  PS2_DAT, // PS2 data line
+  PS2_CLK, // PS2 clock line
+  sw[9], // this is the reset signal
+  LEDR
+);
+//==============================================
+
 
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
@@ -147,7 +173,8 @@ dual_port_ram_sync ROM
  
  
 font_rom   look_UP_table(.clk(clk),      //input wire clk,
-								 .addr({B,py[3:0]} ),   //input wire [10:0] addr,
+								 //.addr({B,py[3:0]} ),   //input wire [10:0] addr,
+								 .addr({scan_code[6:0],py[3:0]}),
 								 .data(bits)  );//output reg [7:0] data
 
 		
