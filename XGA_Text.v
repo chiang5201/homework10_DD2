@@ -26,13 +26,13 @@ wire unknow, clk75, sysnc, reset;
 		.locked(unkonw)    //  locked.export
 	);
 assign reset=SW[9];	
-/*	
+
 wire key00, key01, key02, key03;
 	keypressed button00(.clock(clk75), .reset(SW[9]), .enable_in(KEY[0]), .enable_out(key00));	
 	keypressed button01(.clock(clk75), .reset(SW[9]), .enable_in(KEY[1]), .enable_out(key01));
 	keypressed button02(.clock(clk75), .reset(SW[9]), .enable_in(KEY[2]), .enable_out(key02));
 	keypressed button03(.clock(clk75), .reset(SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
-
+/*
 reg Bg,ball;	
 	assign reset=~KEY[0];	
 always @ (posedge clk75)begin
@@ -80,6 +80,7 @@ show back_ground( .clk(clk75),
 			.px(px),
 		   .py(py),
 			.out(back),
+			.sw(SW),//<== testing input
 			.up(~KEY[1]),
 			.down(~KEY[2]),
 			.right(~KEY[0]),
@@ -88,9 +89,8 @@ show back_ground( .clk(clk75),
 			);
 						
 						
-
-	assign VGA_B =	 8'h0;
-   assign VGA_R = (1'b1&(print)) ? 8'hff:8'h0;  
+	assign VGA_B =	 (print) ? 8'hff:8'h0;//ball 
+   assign VGA_R = (back)?8'hff:8'h0;//char
    assign VGA_G = (at)?8'hff:8'h0;//( (~VGA_R)&1'b1&back) ? 8'hff:8'h0;
 	
 	
@@ -103,14 +103,14 @@ module show(
 			input  wire [10:0] px,
 		   input  wire [10:0] py,
 			output wire out,
-			 input  wire up,
+			 input  wire [9:0]sw,
+ 			 input  wire up,
 			 input  wire down,
 			 input  wire right,
 			 input  wire left,
 			output  wire cursor); 
 				
 wire unkonw;
-reg enable;
 wire [6:0] B;	 
 wire [7:0] bits;
 reg [12:0] counter,Ncounter;
@@ -119,7 +119,7 @@ wire outpix,cpix;
 assign out=outpix;
 assign cursor=cpix;
 
-wire addrROM;//<======================================================================change to addr of rom
+wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
 										.left(left),	//input wire left,
@@ -138,10 +138,10 @@ multiplexer out_display(.sel(px%8),			//input [7:0] sel,
 
 dual_port_ram_sync ROM
    (.clk(clk),
-	 .we(1'b1),
-    .addr_a(counter),//<======change ROM addr
+	 .we(sw[0]),
+    .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
-    .din_a(val[8:2]),//(6'h33),//<==========char
+    .din_a(sw[6:1]),//(val[8:2]),//(6'h33),//<==========char
     .dout_a(unkonw), 
 	 .dout_b(B)) ;
  
@@ -207,12 +207,13 @@ module cursor_position(input wire clk,
 							  input wire [10:0] px,
 							  input wire [10:0] py,
 							  output wire place,
-							  output wire addr);
+							  output wire [12:0] addr);
 reg[10:0] x,y,nx,ny;							  
 reg[12:0] counter, ncounter;
 reg display;
 
 assign place=display;
+assign addr=counter;
 							  
 always @(posedge clk)begin
 if(reset)
@@ -267,7 +268,7 @@ if(down)
  end
  
  
-if(py-nx<9 && py-ny <17) 
+if(px-nx<8 && py-ny <16) 
  display=1;
 				end
 
