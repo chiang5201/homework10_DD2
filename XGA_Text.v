@@ -148,8 +148,8 @@ keyboard_scancoderaw_driver keyboard_input(
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
-										.left(left),	//input wire left,
-										.right(right),	//input wire right,
+										.left(left2),	//input wire left,
+										.right(right2),	//input wire right,
 										.up(up),			//input wire up,
 										.down(down),	//input wire down,
 										.px(px),			//input wire [10:0] px,
@@ -162,11 +162,19 @@ multiplexer out_display(.sel(px%8),			//input [7:0] sel,
 								.data(bits),		//input [7:0]data,
 								.display(outpix));// output reg display);
 
-wire [6:0] charts;								
-chat	look_up_chart( .clk(clk),//input  wire clk,
-							.in(scan_code),//input  wire [7:0]in,
-							.out(charts) );//output reg  [6:0]out)							
+wire [6:0] charts;
+wire movecursor;
 								
+chat	look_up_chart( .clk(clk),//input  wire clk,
+							.reset(sw[9]),
+							.in(scan_code),//input  wire [7:0]in,
+							.movecursor(movecursor),
+							.out(charts) );//output reg  [6:0]out)							
+						
+// Here we assign the cursor inputs based off of keyboard instead of push keys
+wire right2, left2;
+assign right2 = (movecursor && (charts != 7'b110_0110 && charts != 7'b01110101)) ? 1 : 0;
+assign left2 = (movecursor && (charts == 7'b110_0110 || charts == 7'b1101011)) ? 1 : 0; // backspace or left arrow key 		
 								
 dual_port_ram_sync ROM
    (.clk(clk),
@@ -253,122 +261,129 @@ assign addr=counter;
 							  
 always @(posedge clk)begin
 if(reset)
- begin
- x<=0;//512;
- y<=0;//384;
- counter<=0;
- end
-else if(px==1328 && py==805)
- begin
- x<=nx;
- y<=ny;
- counter<=ncounter;
- end 
-							end
+	 begin
+	 x<=0;//512;
+	 y<=0;//384;
+	 counter<=0;
+	 end
+	else if(px==1328 && py==805)
+	 begin
+	 x<=nx;
+	 y<=ny;
+	 counter<=ncounter;
+	 end 
+end
+
 always @(*) begin
-ny=y;
-nx=x;
-ncounter=counter;
-display=0;
-if(left)
- begin
- if(x>0)
-	begin
-		nx=x-8;
-		ncounter=counter-1;
-	end
- end
-else if(right)
- begin
- if(x<1015)
-	begin
-		nx=x+8;
-		ncounter=counter+1;
-	end
- end
-else if(up) 
- begin
- if(y>0)
-	begin
-		ny=y-16;
-		ncounter=counter-128;
-	end
- end
-else if(down) 
- begin
- if(y<751)
-	begin
-		ny=y+16;
-		ncounter=counter+128;
-	end
- end
- 
- 
-if(px-nx<8 && py-ny <16) 
- display=1;
-				end
+	ny=y;
+	nx=x;
+	ncounter=counter;
+	display=0;
+	if(left)
+	 begin
+	 if(x>0)
+		begin
+			nx=x-8;
+			ncounter=counter-1;
+		end
+	 end
+	else if(right)
+	 begin
+	 if(x<1015)
+		begin
+			nx=x+8;
+			ncounter=counter+1;
+		end
+	 end
+	else if(up) 
+	 begin
+	 if(y>0)
+		begin
+			ny=y-16;
+			ncounter=counter-128;
+		end
+	 end
+	else if(down) 
+	 begin
+	 if(y<751)
+		begin
+			ny=y+16;
+			ncounter=counter+128;
+		end
+	 end
+	 
+	 
+	if(px-nx<8 && py-ny <16) 
+	 display=1;
+end
 
 endmodule
 //======================================================================================
 module chat(input  wire clk,
+				input wire reset,
 				input  wire [7:0]in,
-				output reg  [6:0]out);
-reg [6:0] display;
+				output wire movecursor,
+				output wire  [6:0]out);
+reg [6:0] display, nextdisplay;
 
 //wire shift;
 //assign shift = 8'b0001_0010;
 
 
-reg lshift;
-initial lshift=1;
+reg shift, nextshift;
 
 
 always @(posedge clk)
 begin
-out<=display;
-
-if(in==8'b0001_0010)
-	begin
-		lshift= ~lshift;
+	if(reset) begin
+		shift <= 0;
+		display <= 0;
+	end else begin
+		shift <= nextshift;
+		display <= nextdisplay;
 	end
 end
 
-always @(*)
-begin
-if(lshift)
+always @(*) begin
+nextdisplay = display;
+nextshift = shift;
+
+if(in==8'b0001_0010 || in==8'h59) nextshift = ~shift;
+
+if(shift)
 	case (in)
-	8'b0100_0101:display=7'h30;//"0"
-	8'b0001_0110:display=7'h31;//"1"
-	8'b0001_1110:display=7'h32;//"2"
-	8'b0010_0110:display=7'h33;//"3"
-	8'b0010_0101:display=7'h34;//"4"
-	8'b0010_1110:display=7'h35;//"5"
-	8'b0011_0110:display=7'h36;//"6"
-	8'b0011_1101:display=7'h37;//"7"
-	8'b0011_1110:display=7'h38;//"8"
-	8'b0100_0110:display=7'h39;//"9"
-	default:display=7'h00;
-	endcase
+8'b0100_0101:nextdisplay=7'h30;//"0"
+8'b0001_0110:nextdisplay=7'h31;//"1"
+8'b0001_1110:nextdisplay=7'h32;//"2"
+8'b0010_0110:nextdisplay=7'h33;//"3"
+8'b0010_0101:nextdisplay=7'h34;//"4"
+8'b0010_1110:nextdisplay=7'h35;//"5"
+8'b0011_0110:nextdisplay=7'h36;//"6"
+8'b0011_1101:nextdisplay=7'h37;//"7"
+8'b0011_1110:nextdisplay=7'h38;//"8"
+8'b0100_0110:nextdisplay=7'h39;//"9"
+default:nextdisplay=display;
+endcase
 
 else
-	case(in)
-   8'b0100_0101:display=7'h20;//")"
-	8'b0001_0110:display=7'h21;//"1"
-	8'b0001_1110:display=7'h40;//"2"
-	8'b0010_0110:display=7'h23;//"3"
-	8'b0010_0101:display=7'h24;//"4"
-	8'b0010_1110:display=7'h25;//"5"
-	8'b0011_0110:display=7'h26;//"6"
-	8'b0011_1101:display=7'h27;//"7"
-	8'b0011_1110:display=7'h28;//"8"
-	8'b0100_0110:display=7'h29;//"9"
-	default:display=7'h00;
+case(in)
+8'b0100_0101:nextdisplay=7'h20;//")"
+8'b0001_0110:nextdisplay=7'h21;//"1"
+8'b0001_1110:nextdisplay=7'h40;//"2"
+8'b0010_0110:nextdisplay=7'h23;//"3"
+8'b0010_0101:nextdisplay=7'h24;//"4"
+8'b0010_1110:nextdisplay=7'h25;//"5"
+8'b0011_0110:nextdisplay=7'h26;//"6"
+8'b0011_1101:nextdisplay=7'h27;//"7"
+8'b0011_1110:nextdisplay=7'h28;//"8"
+8'b0100_0110:nextdisplay=7'h29;//"9"
+default:nextdisplay=display;
 	endcase
 
 end 
 				
-				
-
+assign out = display;		
+assign movecursor = (display != nextdisplay) ? 1 : 0; //make this signal high whenever new key is pressed
 endmodule 
 //====================================================
 module mover_ball(input  wire clk, 
