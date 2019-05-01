@@ -162,19 +162,28 @@ multiplexer out_display(.sel(px%8),			//input [7:0] sel,
 								.data(bits),		//input [7:0]data,
 								.display(outpix));// output reg display);
 
+wire [6:0] charts;								
+chat	look_up_chart( .clk(clk),//input  wire clk,
+							.in(scan_code),//input  wire [7:0]in,
+							.out(charts) );//output reg  [6:0]out)							
+								
+								
 dual_port_ram_sync ROM
    (.clk(clk),
 	 .we(sw[0]),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
-    .din_a(sw[6:1]),//(val[8:2]),//(6'h33),//<==========char
-    .dout_a(unkonw), 
+    //.din_a(scan_code[6:0]),//(6'h33),//<==========char
+    .din_a(charts),
+	 .dout_a(unkonw), 
 	 .dout_b(B)) ;
  
  
+ 
+ 
 font_rom   look_UP_table(.clk(clk),      //input wire clk,
-								 //.addr({B,py[3:0]} ),   //input wire [10:0] addr,
-								 .addr({scan_code[6:0],py[3:0]}),
+								 .addr({B,py[3:0]} ),   //input wire [10:0] addr,
+								 //.addr({scan_code[6:0],py[3:0]}),
 								 .data(bits)  );//output reg [7:0] data
 
 		
@@ -269,7 +278,7 @@ if(left)
 		ncounter=counter-1;
 	end
  end
-if(right)
+else if(right)
  begin
  if(x<1015)
 	begin
@@ -277,7 +286,7 @@ if(right)
 		ncounter=counter+1;
 	end
  end
-if(up) 
+else if(up) 
  begin
  if(y>0)
 	begin
@@ -285,7 +294,7 @@ if(up)
 		ncounter=counter-128;
 	end
  end
-if(down) 
+else if(down) 
  begin
  if(y<751)
 	begin
@@ -300,6 +309,67 @@ if(px-nx<8 && py-ny <16)
 				end
 
 endmodule
+//======================================================================================
+module chat(input  wire clk,
+				input  wire [7:0]in,
+				output reg  [6:0]out);
+reg [6:0] display;
+
+//wire shift;
+//assign shift = 8'b0001_0010;
+
+
+reg lshift;
+initial lshift=1;
+
+
+always @(posedge clk)
+begin
+out<=display;
+
+if(in==8'b0001_0010)
+	begin
+		lshift= ~lshift;
+	end
+end
+
+always @(*)
+begin
+if(lshift)
+	case (in)
+	8'b0100_0101:display=7'h30;//"0"
+	8'b0001_0110:display=7'h31;//"1"
+	8'b0001_1110:display=7'h32;//"2"
+	8'b0010_0110:display=7'h33;//"3"
+	8'b0010_0101:display=7'h34;//"4"
+	8'b0010_1110:display=7'h35;//"5"
+	8'b0011_0110:display=7'h36;//"6"
+	8'b0011_1101:display=7'h37;//"7"
+	8'b0011_1110:display=7'h38;//"8"
+	8'b0100_0110:display=7'h39;//"9"
+	default:display=7'h00;
+	endcase
+
+else
+	case(in)
+   8'b0100_0101:display=7'h20;//")"
+	8'b0001_0110:display=7'h21;//"1"
+	8'b0001_1110:display=7'h40;//"2"
+	8'b0010_0110:display=7'h23;//"3"
+	8'b0010_0101:display=7'h24;//"4"
+	8'b0010_1110:display=7'h25;//"5"
+	8'b0011_0110:display=7'h26;//"6"
+	8'b0011_1101:display=7'h27;//"7"
+	8'b0011_1110:display=7'h28;//"8"
+	8'b0100_0110:display=7'h29;//"9"
+	default:display=7'h00;
+	endcase
+
+end 
+				
+				
+
+endmodule 
 //====================================================
 module mover_ball(input  wire clk, 
 						input  wire reset,
@@ -384,5 +454,3 @@ end
 assign color= print;
 	
 endmodule
-
-
