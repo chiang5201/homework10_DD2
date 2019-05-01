@@ -30,28 +30,10 @@ wire unknow, clk75, sysnc, reset;
 assign reset=SW[9];	
 
 wire key00, key01, key02, key03;
-	keypressed button00(.clock(clk75), .reset(SW[9]), .enable_in(KEY[0]), .enable_out(key00));	
-	keypressed button01(.clock(clk75), .reset(SW[9]), .enable_in(KEY[1]), .enable_out(key01));
-	keypressed button02(.clock(clk75), .reset(SW[9]), .enable_in(KEY[2]), .enable_out(key02));
-	keypressed button03(.clock(clk75), .reset(SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
-/*
-reg Bg,ball;	
-	assign reset=~KEY[0];	
-always @ (posedge clk75)begin
-if (reset)
- begin 
-	Bg<=0;
-	ball<=0;
- end
-else if(key01)
-	Bg<=1;
-else if(key02)
-	Bg<=0;
-else if(key03) 
-	ball<=1;
-	
-end	
-*/
+	keypressed button00(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[0]), .enable_out(key00));//reset should be to 1 to work	
+	keypressed button01(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[1]), .enable_out(key01));
+	keypressed button02(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[2]), .enable_out(key02));
+	keypressed button03(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
 	
 assign VGA_CLK=clk75;	
 assign VGA_SYNC_N = ~sysnc;
@@ -125,6 +107,7 @@ wire [6:0] B;
 wire [7:0] bits;
 reg [12:0] counter,Ncounter;
 reg [10:0] val,Nval; 
+reg [10:0] npx, cpx, npx2;
 wire outpix,cpix;
 assign out=outpix;
 assign cursor=cpix;
@@ -148,8 +131,8 @@ keyboard_scancoderaw_driver keyboard_input(
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
-										.left(left2),	//input wire left,
-										.right(right2),	//input wire right,
+										.left(left),	//input wire left,
+										.right(right),	//input wire right,
 										.up(up),			//input wire up,
 										.down(down),	//input wire down,
 										.px(px),			//input wire [10:0] px,
@@ -158,30 +141,23 @@ cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.addr(addrROM));//output wire addr);
 
 
-multiplexer out_display(.sel(px%8),			//input [7:0] sel, 
+multiplexer out_display(.sel(npx2[3:0]),//(px%8),			//input [7:0] sel, 
 								.data(bits),		//input [7:0]data,
 								.display(outpix));// output reg display);
 
-wire [6:0] charts;
-wire movecursor;
-								
+wire [6:0] charts;								
 chat	look_up_chart( .clk(clk),//input  wire clk,
-							.reset(sw[9]),
+							.reset(reset),
 							.in(scan_code),//input  wire [7:0]in,
-							.movecursor(movecursor),
 							.out(charts) );//output reg  [6:0]out)							
-						
-// Here we assign the cursor inputs based off of keyboard instead of push keys
-wire right2, left2;
-assign right2 = (movecursor && (charts != 7'b110_0110 && charts != 7'b01110101)) ? 1 : 0;
-assign left2 = (movecursor && (charts == 7'b110_0110 || charts == 7'b1101011)) ? 1 : 0; // backspace or left arrow key 		
+								
 								
 dual_port_ram_sync ROM
    (.clk(clk),
 	 .we(sw[0]),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
-    //.din_a(scan_code[6:0]),//(6'h33),//<==========char
+    //.din_a(6'h33),//<==========char
     .din_a(charts),
 	 .dout_a(unkonw), 
 	 .dout_b(B)) ;
@@ -196,47 +172,35 @@ font_rom   look_UP_table(.clk(clk),      //input wire clk,
 
 		
 always @ (posedge clk)begin
-if(reset)
- begin	
-	counter<=0;
-	val<=97;
- end
-else
- begin
-	counter<=Ncounter;
-	val<=Nval;
- end
- 
+npx<=cpx;
+npx2<=npx;
+
+
 end
 always @(*)begin	
-Nval=val;
-Ncounter=counter;		
+//npx=cpx; 
+cpx=px;
 
-if(counter<6144)
- begin	
-		Nval=(71*val+11)%2047;
-	Ncounter=counter+1;		
- end
- 
 end
 
 endmodule
 //===================================================
-module multiplexer(input wire [7:0] sel, 
+module multiplexer(input wire [2:0] sel, 
 						 input wire [7:0]data,
 						 output reg display);
  
 always @ (*)
 begin
 	case(sel)
-		8'd0:display= data[7];
-		8'd1:display= data[6];
-		8'd2:display= data[5];
-		8'd3:display= data[4];
-		8'd4:display= data[3];
-		8'd5:display= data[2];
-		8'd6:display= data[1];
-		8'd7:display= data[0];
+		3'd0:display= data[7];
+		3'd1:display= data[6];
+		3'd2:display= data[5];
+		3'd3:display= data[4];
+		3'd4:display= data[3];
+		3'd5:display= data[2];
+		3'd6:display= data[1];
+		3'd7:display= data[0];
+	default:display=0;	
 	endcase
 end
 
@@ -261,97 +225,99 @@ assign addr=counter;
 							  
 always @(posedge clk)begin
 if(reset)
-	 begin
-	 x<=0;//512;
-	 y<=0;//384;
-	 counter<=0;
-	 end
-	else if(px==1328 && py==805)
-	 begin
-	 x<=nx;
-	 y<=ny;
-	 counter<=ncounter;
-	 end 
-end
-
+ begin
+ x<=0;//512;
+ y<=0;//384;
+ counter<=0;
+ end
+else if(px==1328 && py==805)
+ begin
+ x<=nx;
+ y<=ny;
+ counter<=ncounter;
+ end 
+							end
 always @(*) begin
-	ny=y;
-	nx=x;
-	ncounter=counter;
-	display=0;
-	if(left)
-	 begin
-	 if(x>0)
-		begin
-			nx=x-8;
-			ncounter=counter-1;
-		end
-	 end
-	else if(right)
-	 begin
-	 if(x<1015)
-		begin
-			nx=x+8;
-			ncounter=counter+1;
-		end
-	 end
-	else if(up) 
-	 begin
-	 if(y>0)
-		begin
-			ny=y-16;
-			ncounter=counter-128;
-		end
-	 end
-	else if(down) 
-	 begin
-	 if(y<751)
-		begin
-			ny=y+16;
-			ncounter=counter+128;
-		end
-	 end
-	 
-	 
-	if(px-nx<8 && py-ny <16) 
-	 display=1;
-end
+ny=y;
+nx=x;
+ncounter=counter;
+display=0;
+if(left)
+ begin
+ if(x>0)
+	begin
+		nx=x-8;
+		ncounter=counter-1;
+	end
+ end
+else if(right)
+ begin
+ if(x<1015)
+	begin
+		nx=x+8;
+		ncounter=counter+1;
+	end
+ end
+else if(up) 
+ begin
+ if(y>0)
+	begin
+		ny=y-16;
+		ncounter=counter-128;
+	end
+ end
+else if(down) 
+ begin
+ if(y<751)
+	begin
+		ny=y+16;
+		ncounter=counter+128;
+	end
+ end
+ 
+ 
+if(px-nx<8 && py-ny <16) 
+ display=1;
+				end
 
 endmodule
 //======================================================================================
 module chat(input  wire clk,
-				input wire reset,
-				input  wire [7:0]in,
-				output wire movecursor,
-				output wire  [6:0]out);
-reg [6:0] display, nextdisplay;
-
 				input  wire reset,
 				input  wire [7:0]in,
 				output reg [6:0]out);
 reg [6:0] display;
 
-reg shift, nextshift;
+
+
+
+reg[2:0] lshift;
+//initial lshift=1;
 
 
 always @(posedge clk)          begin
-	if(reset) begin
-		shift <= 0;
-		display <= 0;
-	end else begin
-		shift <= nextshift;
-		display <= nextdisplay;
+if(reset)
+	begin
+	out<=7'b0;
+	lshift<=0;
+	end
+
+else 
+begin
+out<=display;
+if(in==8'b0001_0010)
+	begin
+		lshift=lshift+1;
+		
+		
 	end
 end
 	
+											end
 
-always @(*) begin
-nextdisplay = display;
-nextshift = shift;
-
-if(in==8'b0001_0010 || in==8'h59) nextshift = ~shift;
-
-if(~shift)
+always @(*)
+begin
+if(~lshift)
 	case (in)
 	8'b0100_0101:display=7'h30;//"0"
 	8'b0001_0110:display=7'h31;//"1"
@@ -420,8 +386,8 @@ else
 
 end 
 				
-assign out = display;		
-assign movecursor = (display != nextdisplay) ? 1 : 0; //make this signal high whenever new key is pressed
+				
+
 endmodule 
 //====================================================
 module mover_ball(input  wire clk, 
