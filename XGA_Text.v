@@ -115,7 +115,7 @@ assign cursor=cpix;
 //===========Logic to take keyboard codes and pass them to font rom=========
 wire scan_ready;
 wire [7:0] scan_code;
-keyboard_scancoderaw_driver keyboard_input(
+/*keyboard_scancoderaw_driver keyboard_input(
   CLOCK_50, 
   KEY,
   scan_ready, // 1 when a scan_code arrives from the inner driver
@@ -125,13 +125,18 @@ keyboard_scancoderaw_driver keyboard_input(
   sw[9], // this is the reset signal
   LEDR
 );
+*/
+wire valid, makeBreak;
+assign LEDR[0] = makeBreak;
+assign LEDR[1] = valid;
+keyboard_press_driver(CLOCK_50, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
 //==============================================
 
 
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
-										.left(left),	//input wire left,
+										.left(makeBreak),	//input wire left,
 										.right(right),	//input wire right,
 										.up(up),			//input wire up,
 										.down(down),	//input wire down,
@@ -154,7 +159,8 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 								
 dual_port_ram_sync ROM
    (.clk(clk),
-	 .we(sw[0]),
+	 //.we(sw[0]),
+	 .we(makeBreak),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
     //.din_a(6'h33),//<==========char
