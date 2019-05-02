@@ -129,15 +129,67 @@ wire [7:0] scan_code;
 wire valid, makeBreak;
 assign LEDR[0] = makeBreak;
 assign LEDR[1] = valid;
-keyboard_press_driver(CLOCK_50, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
+assign LEDR[9:2] = scan_code;
+
+		
+always @ (posedge CLOCK_50)begin
+	npx<=cpx;
+	npx2<=npx;
+	if(reset) begin
+		delay_state <= idle;
+		press_delay <= 0;
+		done_delay <= 0;
+	end else begin
+		press_delay <= npress_delay;
+		delay_state <= ndelay_state;
+		done_delay <= ndone_delay;
+	end
+
+end
+
+always @(*)begin	
+//npx=cpx; 
+cpx=px;
+
+end
+
+// this counter is used to add delay between a keypress, to allow single character press
+reg [24:0] press_delay, npress_delay; // without, a single press results in stream of around 4-6 characters!
+reg [15:0] done_delay, ndone_delay;
+reg [1:0] delay_state, ndelay_state;
+localparam idle = 0, counting = 1, done = 2;
+wire move_right;
+assign move_right = (delay_state == done) ? 1: 0;
+
+// press delay assignment logic
+always@(*) begin
+	if(delay_state == idle) ndone_delay = 0;
+	else if(delay_state == counting) npress_delay = press_delay + 1'b1; // waiting state when delay_state == 1
+	else if(delay_state == done) ndone_delay = done_delay + 1'b1;
+end
+
+//next press delay state assignment logic
+always@(*) begin
+ndelay_state = delay_state;
+	case(delay_state)
+		idle: if(makeBreak) ndelay_state = counting;
+		counting: if(press_delay == 0) ndelay_state = done;
+		done: if(done_delay == 1) ndelay_state = idle; //if(done_delay == 16'hffff) ndelay_state = idle;
+		default: ndelay_state = delay_state;
+	endcase
+end
+
+//keypressed moveright(.clock(clk75), .reset(~reset), .enable_in(makeBreak), .enable_out(move_right));
+
+keyboard_press_driver keyboard_driver(CLOCK_50, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
 //==============================================
 
 
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
-										.left(makeBreak),	//input wire left,
-										.right(right),	//input wire right,
+										.left(left),	//input wire left,
+										.right(move_right),	//input wire right,
 										.up(up),			//input wire up,
 										.down(down),	//input wire down,
 										.px(px),			//input wire [10:0] px,
@@ -160,7 +212,7 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 dual_port_ram_sync ROM
    (.clk(clk),
 	 //.we(sw[0]),
-	 .we(makeBreak),
+	 .we(sw[0]),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
     //.din_a(6'h33),//<==========char
@@ -176,18 +228,7 @@ font_rom   look_UP_table(.clk(clk),      //input wire clk,
 								 //.addr({scan_code[6:0],py[3:0]}),
 								 .data(bits)  );//output reg [7:0] data
 
-		
-always @ (posedge clk)begin
-npx<=cpx;
-npx2<=npx;
 
-
-end
-always @(*)begin	
-//npx=cpx; 
-cpx=px;
-
-end
 
 endmodule
 //===================================================
