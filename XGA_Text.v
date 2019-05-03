@@ -131,10 +131,13 @@ assign LEDR[0] = makeBreak;
 assign LEDR[1] = valid;
 assign LEDR[9:2] = scan_code;
 
-		
-always @ (posedge CLOCK_50)begin
+always@(posedge clk) begin
 	npx<=cpx;
 	npx2<=npx;
+end
+
+always @ (posedge CLOCK_50)begin
+	
 	if(reset) begin
 		delay_state <= idle;
 		press_delay <= 0;
