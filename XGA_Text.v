@@ -152,7 +152,7 @@ cpx=px;
 end
 
 // this counter is used to add delay between a keypress, to allow single character press
-reg [24:0] press_delay, npress_delay; // without, a single press results in stream of around 4-6 characters!
+reg [20:0] press_delay, npress_delay; // without, a single press results in stream of around 4-6 characters!
 reg [19:0] done_delay, ndone_delay;
 reg [1:0] delay_state, ndelay_state;
 localparam idle = 0, counting = 1, done = 2;
