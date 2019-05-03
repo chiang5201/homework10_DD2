@@ -87,7 +87,7 @@ endmodule
 //===============================================
 module show(
 			input wire CLOCK_50,
-			input  wire clk,
+			input  wire clk, // 75 mhz for VGA
 			input  wire reset,
 			input  wire [10:0] px,
 		   input  wire [10:0] py,
@@ -131,13 +131,9 @@ assign LEDR[0] = makeBreak;
 assign LEDR[1] = valid;
 assign LEDR[9:2] = scan_code;
 
-always@(posedge clk) begin
+always@(posedge clk) begin // syncronous block on 75 mHz clock
 	npx<=cpx;
 	npx2<=npx;
-end
-
-always @ (posedge CLOCK_50)begin
-	
 	if(reset) begin
 		delay_state <= idle;
 		press_delay <= 0;
@@ -147,7 +143,6 @@ always @ (posedge CLOCK_50)begin
 		delay_state <= ndelay_state;
 		done_delay <= ndone_delay;
 	end
-
 end
 
 always @(*)begin	
@@ -158,7 +153,7 @@ end
 
 // this counter is used to add delay between a keypress, to allow single character press
 reg [24:0] press_delay, npress_delay; // without, a single press results in stream of around 4-6 characters!
-reg [15:0] done_delay, ndone_delay;
+reg [19:0] done_delay, ndone_delay;
 reg [1:0] delay_state, ndelay_state;
 localparam idle = 0, counting = 1, done = 2;
 wire move_right;
@@ -166,6 +161,8 @@ assign move_right = (delay_state == done) ? 1: 0;
 
 // press delay assignment logic
 always@(*) begin
+	ndone_delay = done_delay;
+	npress_delay = press_delay;
 	if(delay_state == idle) ndone_delay = 0;
 	else if(delay_state == counting) npress_delay = press_delay + 1'b1; // waiting state when delay_state == 1
 	else if(delay_state == done) ndone_delay = done_delay + 1'b1;
@@ -177,14 +174,14 @@ ndelay_state = delay_state;
 	case(delay_state)
 		idle: if(makeBreak) ndelay_state = counting;
 		counting: if(press_delay == 0) ndelay_state = done;
-		done: if(done_delay == 1) ndelay_state = idle; //if(done_delay == 16'hffff) ndelay_state = idle;
+		done: if(done_delay == {sw[8:1], 4'hf, 8'hff}) ndelay_state = idle; //if(done_delay == 16'hffff) ndelay_state = idle;
 		default: ndelay_state = delay_state;
 	endcase
 end
 
-//keypressed moveright(.clock(clk75), .reset(~reset), .enable_in(makeBreak), .enable_out(move_right));
 
-keyboard_press_driver keyboard_driver(CLOCK_50, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
+
+keyboard_press_driver keyboard_driver(clk, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
 //==============================================
 
 
@@ -274,61 +271,65 @@ assign place=display;
 assign addr=counter;
 							  
 always @(posedge clk)begin
-if(reset)
- begin
- x<=0;//512;
- y<=0;//384;
- counter<=0;
- end
-else if(px==1328 && py==805)
- begin
- x<=nx;
- y<=ny;
- counter<=ncounter;
- end 
-							end
+	if(reset)
+	begin
+		x<=0;//512;
+		y<=0;//384;
+		counter<=0;
+	end
+	else if(px==1328 && py==805)
+	begin
+		x<=nx;
+		y<=ny;
+		counter<=ncounter;
+	end 
+end
+
 always @(*) begin
-ny=y;
-nx=x;
-ncounter=counter;
-display=0;
-if(left)
- begin
- if(x>0)
-	begin
-		nx=x-8;
-		ncounter=counter-1;
-	end
- end
-else if(right)
- begin
- if(x<1015)
-	begin
-		nx=x+8;
-		ncounter=counter+1;
-	end
- end
-else if(up) 
- begin
- if(y>0)
-	begin
-		ny=y-16;
-		ncounter=counter-128;
-	end
- end
-else if(down) 
- begin
- if(y<751)
-	begin
-		ny=y+16;
-		ncounter=counter+128;
-	end
- end
- 
- 
-if(px-nx<8 && py-ny <16) 
- display=1;
-				end
+	ny=y;
+	nx=x;
+	ncounter=counter;
+	display=0;
+	if(left)
+	 begin
+	 if(x>0)
+		begin
+			nx=x-8;
+			ncounter=counter-1;
+		end
+	 end
+	else if(right)
+	 begin
+	 if(x<1015)
+		begin
+			nx=x+8;
+			ncounter=counter+1;
+		end else begin
+			ny = y + 16; // at end of line; go to next line
+			nx = 0;
+			ncounter=counter+1;
+		end
+	 end
+	else if(up) 
+	 begin
+	 if(y>0)
+		begin
+			ny=y-16;
+			ncounter=counter-128;
+		end
+	 end
+	else if(down) 
+	 begin
+	 if(y<751)
+		begin
+			ny=y+16;
+			ncounter=counter+128;
+		end
+	 end
+	 
+	 
+	if(px-nx<8 && py-ny <16) display=1;
+end
 
 endmodule
 //======================================================================================
