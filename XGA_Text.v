@@ -199,7 +199,7 @@ cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.addr(addrROM));//output wire addr);
 
 
-multiplexer out_display(.sel(npx2[3:0]),//(px%8),			//input [7:0] sel, 
+multiplexer out_display(.sel(npx2[3:0]),//input [7:0] sel, 
 								.data(bits),		//input [7:0]data,
 								.display(outpix));// output reg display);
 
@@ -215,10 +215,13 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 							.left(cl)
 							);//output reg  [6:0]out)							
 								
-								
+
+wire maybe;
+assign maybe=scan_code[7];
 dual_port_ram_sync ROM
    (.clk(clk),
-	 .we(sw[0]),
+	 //.we(sw[0]),
+	 .we( ~(cu | cd | cl | cr | maybe )     ),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
     //.din_a(6'h33),//<==========char
