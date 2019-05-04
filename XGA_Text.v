@@ -188,10 +188,11 @@ keyboard_press_driver keyboard_driver(clk, valid, makeBreak, scan_code, PS2_DAT,
 wire [12:0] addrROM;//<======================================================================change to addr of rom
 cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.reset(reset),	//input wire reset,
-										.left(left),	//input wire left,
-										.right(move_right),	//input wire right,
-										.up(up),			//input wire up,
-										.down(down),	//input wire down,
+										.action(move_right),
+										.left(cl),	//input wire left,
+										.right(cr),	//input wire right,
+										.up(cu),			//input wire up,
+										.down(cd),	//input wire down,
 										.px(px),			//input wire [10:0] px,
 										.py(py),			//input wire [10:0] py,
 										.place(cpix),	//output wire place
@@ -202,16 +203,21 @@ multiplexer out_display(.sel(npx2[3:0]),//(px%8),			//input [7:0] sel,
 								.data(bits),		//input [7:0]data,
 								.display(outpix));// output reg display);
 
-wire [6:0] charts;								
+wire [6:0] charts;
+wire cu,cd,cl,cr;								
 chat	look_up_chart( .clk(clk),//input  wire clk,
 							.reset(reset),
 							.in(scan_code),//input  wire [7:0]in,
-							.out(charts) );//output reg  [6:0]out)							
+							.out(charts),
+							.up(cu),
+							.donw(cd),
+							.right(cr),
+							.left(cl)
+							);//output reg  [6:0]out)							
 								
 								
 dual_port_ram_sync ROM
    (.clk(clk),
-	 //.we(sw[0]),
 	 .we(sw[0]),
     .addr_a(addrROM),//<======change ROM addr
 	 .addr_b({py[9:4],px[9:3]}),
@@ -255,6 +261,7 @@ endmodule
 //=====================================================
 module cursor_position(input wire clk,
 							  input wire reset,
+							  input wire action,
 							  input wire left,
 							  input wire right,
 							  input wire up,
@@ -290,7 +297,7 @@ always @(*) begin
 	nx=x;
 	ncounter=counter;
 	display=0;
-	if(left)
+	if(left && action)
 	 begin
 	 if(x>0)
 		begin
@@ -298,19 +305,15 @@ always @(*) begin
 			ncounter=counter-1;
 		end
 	 end
-	else if(right)
+	else if(right && action)
 	 begin
 	 if(x<1015)
 		begin
 			nx=x+8;
 			ncounter=counter+1;
-		end else begin
-			ny = y + 16; // at end of line; go to next line
-			nx = 0;
-			ncounter=counter+1;
 		end
 	 end
-	else if(up) 
+	else if(up && action) 
 	 begin
 	 if(y>0)
 		begin
@@ -318,7 +321,7 @@ always @(*) begin
 			ncounter=counter-128;
 		end
 	 end
-	else if(down) 
+	else if(down && action)  
 	 begin
 	 if(y<751)
 		begin
@@ -326,7 +329,20 @@ always @(*) begin
 			ncounter=counter+128;
 		end
 	 end
-	 
+	 else if(action)
+	  begin
+			if(x<1015)
+			begin
+				nx=x+8;
+				ncounter=counter+1;
+			end
+			else
+			begin
+				ny = y + 16; // at end of line; go to next line
+				nx = 0;
+				ncounter=counter+1;
+			end
+		end
 	 
 	if(px-nx<8 && py-ny <16) display=1;
 end
@@ -336,7 +352,12 @@ endmodule
 module chat(input  wire clk,
 				input  wire reset,
 				input  wire [7:0]in,
-				output reg [6:0]out);
+				output reg [6:0]out,
+				output reg up,
+				output reg donw,
+				output reg right,
+				output reg left
+				);
 reg [6:0] display;
 
 
@@ -368,7 +389,10 @@ end
 
 always @(*)
 begin
-if(~lshift)
+up=0;
+donw=0;
+right=0;
+left=0;
 	case (in)
 	8'b0100_0101:display=7'h30;//"0"
 	8'b0001_0110:display=7'h31;//"1"
@@ -419,8 +443,11 @@ if(~lshift)
    8'h1A: display = 8'h7A; //z	
 	default:display=7'h00;
 	endcase
-
-else
+ if(8'h75==in) up=1;
+else if(8'h72==in) donw=1;
+else if(8'h6b==in) left=1;
+else if(8'h74==in) right=1;
+/*else
 	case(in)
    8'b0100_0101:display=7'h20;//")"
 	8'b0001_0110:display=7'h21;//"!"
@@ -434,7 +461,7 @@ else
 	8'b0100_0110:display=7'h29;//"("
 	default:display=7'h00;
 	endcase
-
+*/
 end 
 				
 				
