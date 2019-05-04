@@ -185,7 +185,7 @@ keyboard_press_driver keyboard_driver(clk, valid, makeBreak, scan_code, PS2_DAT,
 
 // shift key logic instantiation
 wire uppercase;
-shift_key_FSM shiftKeyGovernor(clk, reset, scan_code, uppercase);
+shift_key_FSM shiftKeyGovernor(clk, reset, makeBreak, scan_code, uppercase);
 //==============================================
 
 
@@ -199,6 +199,7 @@ cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.down(cd),	//input wire down,
 										.enter(enter),
 										.back(back),
+										.shift(shift),
 										.px(px),			//input wire [10:0] px,
 										.py(py),			//input wire [10:0] py,
 										.place(cpix),	//output wire place
@@ -211,7 +212,7 @@ multiplexer out_display(.sel(npx2[3:0]),//input [7:0] sel,
 								.display(outpix));// output reg display);
 
 wire [6:0] charts;
-wire cu,cd,cl,cr,enter,back;								
+wire cu,cd,cl,cr,enter,back,shift;								
 chat	look_up_chart( .clk(clk),//input  wire clk,
 							.reset(reset),
 							.in(scan_code),//input  wire [7:0]in,
@@ -222,6 +223,7 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 							.left(cl),     //output reg  [6:0]out)	
 							.enter(enter),
 							.back(back),
+							.shift(shift),
 							.uppercase(uppercase)
 							);
 								
@@ -251,6 +253,7 @@ module cursor_position(input wire clk,
 							  input wire down,
 							  input wire enter,
 							  input wire back,
+							  input wire shift,
 							  input wire [10:0] px,
 							  input wire [10:0] py,
 							  output wire place,
@@ -296,7 +299,7 @@ always @(*) begin
 		end
 	 else 
 		begin
-			nx=1000;
+			nx=1016;
 			ny=y-16;
 		   ncounter=counter-1;
 		end
@@ -334,6 +337,8 @@ always @(*) begin
 			ncounter=128*(y/16)+128;
 		end
 	 end
+	 else if(shift) bs=0;
+
 	 else if(action)
 	  begin
 			if(x<1015)
@@ -364,35 +369,20 @@ module chat(input  wire clk,
 				output reg right,
 				output reg left,
 				output reg enter,
-				output reg back
+				output reg back,
+				output reg shift,
 				input wire uppercase
 				);
 
 reg [6:0] display;
-
-
-
 reg bs;
-reg[2:0] lshift;
 
 
 always @(posedge clk)          begin
-if(reset)
-	begin
-	out<=7'b0;
-	lshift<=0;
-	end
+if(reset)	out<=7'b0;
 
-else 
-begin
-out<=display;
-if(in==8'b0001_0010)
-	begin
-		lshift=lshift+1;
-		
-		
-	end
-end
+else 			out<=display;
+
 	
 											end
 
@@ -404,7 +394,16 @@ right=0;
 left=0;
 enter=0;
 back=0;
-	if(uppercase) begin
+shift=0;
+	  if(in[7]==1) bs=1;
+else if(	8'h59==in || 8'h12==in) shift=1;	 
+else if(8'h75==in) up=1;
+else if(8'h72==in) donw=1;
+else if(8'h6b==in) left=1;
+else if(8'h74==in) right=1;
+else if(8'h5a==in) enter=1;
+else if(8'h66==in) back=1;
+	else if(uppercase) begin
 		case(in)
 			8'h1C: display <= 8'h41; //A
           8'h32: display <= 8'h42; //B
@@ -508,28 +507,7 @@ back=0;
 		default:display=7'h00;
 		endcase
 	end // end else (not uppercase)
-	 if(in[7]==1) bs=1;
-else if(8'h75==in) up=1;
-else if(8'h72==in) donw=1;
-else if(8'h6b==in) left=1;
-else if(8'h74==in) right=1;
-else if(8'h5a==in) enter=1;
-else if(8'h66==in) back=1;
-/*else
-	case(in)
-   8'b0100_0101:display=7'h20;//")"
-	8'b0001_0110:display=7'h21;//"!"
-	8'b0001_1110:display=7'h40;//"@"
-	8'b0010_0110:display=7'h23;//"#"
-	8'b0010_0101:display=7'h24;//"$"
-	8'b0010_1110:display=7'h25;//"%"
-	8'b0011_0110:display=7'h26;//"^"
-	8'b0011_1101:display=7'h27;//"&"
-	8'b0011_1110:display=7'h28;//"*"
-	8'b0100_0110:display=7'h29;//"("
-	default:display=7'h00;
-	endcase
-*/
+
 end 
 				
 				
@@ -624,11 +602,13 @@ endmodule
 // or not output should be uppercase/special characters
 module shift_key_FSM(input wire clk,
 							input wire reset,
+							input wire ready,
 							input wire [7:0] scan_code, 
 							output wire uppercase // goes high when we are in upper case state. Used by chat module
 							);
 	localparam lower = 0, upper_right = 1, upper_left = 2;
 	reg [1:0] state, nstate;
+	reg BS;
 	
 	always@(posedge clk) begin
 		if(reset) state <= lower; // for initial state
@@ -639,17 +619,16 @@ module shift_key_FSM(input wire clk,
 	
 	always@(*) begin
 		nstate = state;
-		case(scan_code)
-			8'h59: begin
-						if(state == lower) nstate = upper_right;
-						else nstate = lower;
-					end
-			8'h12: begin
-						if(state == lower) nstate = upper_left;
-						else nstate = lower;
-					end
-			default: nstate = state;
-		endcase
+		if(scan_code[7]==1) BS=0;
+		else
+		begin	
+			case({scan_code})			
+				8'h59: nstate = upper_right;
+				8'h12: nstate = upper_left ;
+				default: nstate = state;
+			endcase			
+			if(~ready) nstate = lower;			
+		end
 	end
 	assign uppercase = (state != lower) ? 1 : 0;					
 endmodule
