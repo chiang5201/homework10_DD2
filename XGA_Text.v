@@ -194,6 +194,7 @@ cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.up(cu),			//input wire up,
 										.down(cd),	//input wire down,
 										.enter(enter),
+										.back(back),
 										.px(px),			//input wire [10:0] px,
 										.py(py),			//input wire [10:0] py,
 										.place(cpix),	//output wire place
@@ -205,7 +206,7 @@ multiplexer out_display(.sel(npx2[3:0]),//input [7:0] sel,
 								.display(outpix));// output reg display);
 
 wire [6:0] charts;
-wire cu,cd,cl,cr,enter;								
+wire cu,cd,cl,cr,enter,back;								
 chat	look_up_chart( .clk(clk),//input  wire clk,
 							.reset(reset),
 							.in(scan_code),//input  wire [7:0]in,
@@ -215,6 +216,7 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 							.right(cr),
 							.left(cl),     //output reg  [6:0]out)	
 							.enter(enter),
+							.back(back)
 							);						
 								
 
@@ -227,15 +229,10 @@ dual_port_ram_sync ROM
 	 .dout_a(unkonw), 
 	 .dout_b(B)) ;
  
- 
- 
- 
 font_rom   look_UP_table(.clk(clk),      //input wire clk,
 								 .addr({B,py[3:0]} ),   //input wire [10:0] addr,
 								 //.addr({scan_code[6:0],py[3:0]}),
 								 .data(bits)  );//output reg [7:0] data
-
-
 
 endmodule
 //=====================================================
@@ -247,6 +244,7 @@ module cursor_position(input wire clk,
 							  input wire up,
 							  input wire down,
 							  input wire enter,
+							  input wire back,
 							  input wire [10:0] px,
 							  input wire [10:0] py,
 							  output wire place,
@@ -272,21 +270,30 @@ always @(posedge clk)begin
 		counter<=ncounter;
 	end 
 end
+reg bs;
 
 always @(*) begin
 	ny=y;
 	nx=x;
 	ncounter=counter;
 	display=0;
-	if(left && action)
+	if((left||back) && action)
 	 begin
-	 if(x>0)
+	 if(y==0 && x==0) bs=0; 
+
+	 else if(x>0)
 		begin
 			nx=x-8;
 			ncounter=counter-1;
 		end
+	 else 
+		begin
+			nx=1000;
+			ny=y-16;
+		   ncounter=counter-1;
+		end
 	 end
-	else if(right && action)
+	else if( right && action)
 	 begin
 	 if(x<1015)
 		begin
@@ -294,7 +301,7 @@ always @(*) begin
 			ncounter=counter+1;
 		end
 	 end
-	else if(up && action) 
+	else if(up&& action) 
 	 begin
 	 if(y>0)
 		begin
@@ -347,15 +354,15 @@ module chat(input  wire clk,
 				output reg donw,
 				output reg right,
 				output reg left,
-				output reg enter
+				output reg enter,
+				output reg back
 				);
 reg [6:0] display;
 
 
 
-
+reg bs;
 reg[2:0] lshift;
-//initial lshift=1;
 
 
 always @(posedge clk)          begin
@@ -385,6 +392,7 @@ donw=0;
 right=0;
 left=0;
 enter=0;
+back=0;
 	case (in)
 	8'b0100_0101:display=7'h30;//"0"
 	8'b0001_0110:display=7'h31;//"1"
@@ -435,12 +443,13 @@ enter=0;
    8'h1A: display = 8'h7A; //z	
 	default:display=7'h00;
 	endcase
- if(8'h75==in) up=1;
+ if(in[7]==1) bs=1;
+else if(8'h75==in) up=1;
 else if(8'h72==in) donw=1;
 else if(8'h6b==in) left=1;
 else if(8'h74==in) right=1;
 else if(8'h5a==in) enter=1;
-else if(8'h)
+else if(8'h66==in) back=1;
 /*else
 	case(in)
    8'b0100_0101:display=7'h20;//")"
