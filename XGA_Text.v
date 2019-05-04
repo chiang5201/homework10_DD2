@@ -193,6 +193,7 @@ cursor_position display_cursor(.clk(clk),		//input wire clk,
 										.right(cr),	//input wire right,
 										.up(cu),			//input wire up,
 										.down(cd),	//input wire down,
+										.enter(enter),
 										.px(px),			//input wire [10:0] px,
 										.py(py),			//input wire [10:0] py,
 										.place(cpix),	//output wire place
@@ -204,7 +205,7 @@ multiplexer out_display(.sel(npx2[3:0]),//input [7:0] sel,
 								.display(outpix));// output reg display);
 
 wire [6:0] charts;
-wire cu,cd,cl,cr;								
+wire cu,cd,cl,cr,enter;								
 chat	look_up_chart( .clk(clk),//input  wire clk,
 							.reset(reset),
 							.in(scan_code),//input  wire [7:0]in,
@@ -212,19 +213,16 @@ chat	look_up_chart( .clk(clk),//input  wire clk,
 							.up(cu),
 							.donw(cd),
 							.right(cr),
-							.left(cl)
-							);//output reg  [6:0]out)							
+							.left(cl),     //output reg  [6:0]out)	
+							.enter(enter),
+							);						
 								
 
-wire maybe;
-assign maybe=scan_code[7];
 dual_port_ram_sync ROM
    (.clk(clk),
-	 //.we(sw[0]),
-	 .we( ~(cu | cd | cl | cr | maybe )     ),
+	 .we( ~(cu | cd | cl | cr | scan_code[7] | enter )     ),
     .addr_a(addrROM),//<======change ROM addr
-	 .addr_b({py[9:4],px[9:3]}),
-    //.din_a(6'h33),//<==========char
+	 .addr_b({py[9:4],px[9:3]}),//<==========char
     .din_a(charts),
 	 .dout_a(unkonw), 
 	 .dout_b(B)) ;
@@ -240,27 +238,6 @@ font_rom   look_UP_table(.clk(clk),      //input wire clk,
 
 
 endmodule
-//===================================================
-module multiplexer(input wire [2:0] sel, 
-						 input wire [7:0]data,
-						 output reg display);
- 
-always @ (*)
-begin
-	case(sel)
-		3'd0:display= data[7];
-		3'd1:display= data[6];
-		3'd2:display= data[5];
-		3'd3:display= data[4];
-		3'd4:display= data[3];
-		3'd5:display= data[2];
-		3'd6:display= data[1];
-		3'd7:display= data[0];
-	default:display=0;	
-	endcase
-end
-
-endmodule
 //=====================================================
 module cursor_position(input wire clk,
 							  input wire reset,
@@ -269,6 +246,7 @@ module cursor_position(input wire clk,
 							  input wire right,
 							  input wire up,
 							  input wire down,
+							  input wire enter,
 							  input wire [10:0] px,
 							  input wire [10:0] py,
 							  output wire place,
@@ -332,6 +310,15 @@ always @(*) begin
 			ncounter=counter+128;
 		end
 	 end
+	 else if(enter && action)
+	 begin
+	  	 if(y<751)
+		 begin
+			ny=y+16;
+			nx = 0;
+			ncounter=128*(y/16)+128;
+		end
+	 end
 	 else if(action)
 	  begin
 			if(x<1015)
@@ -359,7 +346,8 @@ module chat(input  wire clk,
 				output reg up,
 				output reg donw,
 				output reg right,
-				output reg left
+				output reg left,
+				output reg enter
 				);
 reg [6:0] display;
 
@@ -396,6 +384,7 @@ up=0;
 donw=0;
 right=0;
 left=0;
+enter=0;
 	case (in)
 	8'b0100_0101:display=7'h30;//"0"
 	8'b0001_0110:display=7'h31;//"1"
@@ -450,6 +439,8 @@ left=0;
 else if(8'h72==in) donw=1;
 else if(8'h6b==in) left=1;
 else if(8'h74==in) right=1;
+else if(8'h5a==in) enter=1;
+else if(8'h)
 /*else
 	case(in)
    8'b0100_0101:display=7'h20;//")"
