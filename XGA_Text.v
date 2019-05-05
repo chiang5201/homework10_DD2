@@ -28,12 +28,6 @@ wire unknow, clk75, sysnc, reset;
 		.locked(unkonw)    //  locked.export
 	);
 assign reset=SW[9];	
-
-wire key00, key01, key02, key03;
-	keypressed button00(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[0]), .enable_out(key00));//reset should be to 1 to work	
-	keypressed button01(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[1]), .enable_out(key01));
-	keypressed button02(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[2]), .enable_out(key02));
-	keypressed button03(.clock(clk75), .reset(~SW[9]), .enable_in(KEY[3]), .enable_out(key03));	
 	
 assign VGA_CLK=clk75;	
 assign VGA_SYNC_N = ~sysnc;
@@ -50,12 +44,7 @@ vesasync pix00(
     .pixel_y(py)  // pixel Y coordinate
 );	
 		
-wire print, back,at;
-mover_ball coloer( .clk(clk75), 
-						.reset(reset),
-						.px(px),
-						.py(py), 
-						.color(print));
+wire back,at;
 
 						
 show back_ground( 
@@ -66,10 +55,6 @@ show back_ground(
 		   .py(py),
 			.out(back),
 			.sw(SW),//<== testing input
-			.up(~KEY[1]),
-			.down(~KEY[2]),
-			.right(~KEY[0]),
-			.left(~KEY[3]),
 			.cursor(at),
 			.PS2_DAT(PS2_DAT),
 			.PS2_CLK(PS2_CLK),
@@ -77,9 +62,9 @@ show back_ground(
 			);
 						
 						
-	assign VGA_B =	 (print) ? 8'hff:8'h0;//ball 
+	assign VGA_B =	 (back) ? 8'hff:8'h0;//ball 
    assign VGA_R = (back)?8'hff:8'h0;//char
-   assign VGA_G = (at)?8'hff:8'h0;//( (~VGA_R)&1'b1&back) ? 8'hff:8'h0;
+   assign VGA_G = (back|at)?8'hff:8'h0;//( (~VGA_R)&1'b1&back) ? 8'hff:8'h0;
 	
 	
 	
@@ -93,10 +78,6 @@ module show(
 		   input  wire [10:0] py,
 			output wire out,
 			 input  wire [9:0]sw,
- 			 input  wire up,
-			 input  wire down,
-			 input  wire right,
-			 input  wire left,
 			output  wire cursor,
 			input wire PS2_DAT,
 			input wire PS2_CLK,
@@ -115,17 +96,6 @@ assign cursor=cpix;
 //===========Logic to take keyboard codes and pass them to font rom=========
 wire scan_ready;
 wire [7:0] scan_code;
-/*keyboard_scancoderaw_driver keyboard_input(
-  CLOCK_50, 
-  KEY,
-  scan_ready, // 1 when a scan_code arrives from the inner driver
-  scan_code, // most recent byte scan_code
-  PS2_DAT, // PS2 data line
-  PS2_CLK, // PS2 clock line
-  sw[9], // this is the reset signal
-  LEDR
-);
-*/
 wire valid, makeBreak;
 assign LEDR[0] = makeBreak;
 assign LEDR[1] = valid;
@@ -134,53 +104,23 @@ assign LEDR[9:2] = scan_code;
 always@(posedge clk) begin // syncronous block on 75 mHz clock
 	npx<=cpx;
 	npx2<=npx;
-	if(reset) begin
-		delay_state <= idle;
-		press_delay <= 0;
-		done_delay <= 0;
-	end else begin
-		press_delay <= npress_delay;
-		delay_state <= ndelay_state;
-		done_delay <= ndone_delay;
-	end
+	
 end
 
 always @(*)begin	
-//npx=cpx; 
 cpx=px;
-
 end
+
+pressed A(  .clk(clk),//input wire clk,
+				.reset(reset), //input wire reset,
+				.ready(makeBreak), //input wire ready,
+				.done(scan_code[7]),//input wire done,
+				.out(move_right));//output reg out);
+
+
 
 // this counter is used to add delay between a keypress, to allow single character press
-reg [20:0] press_delay, npress_delay; // without, a single press results in stream of around 4-6 characters!
-reg [19:0] done_delay, ndone_delay;
-reg [1:0] delay_state, ndelay_state;
-localparam idle = 0, counting = 1, done = 2;
-wire move_right, input_registered;
-assign move_right = (delay_state == done) ? 1: 0;
-
-// press delay assignment logic
-always@(*) begin
-	ndone_delay = done_delay;
-	npress_delay = press_delay;
-	if(delay_state == idle) ndone_delay = 0;
-	else if(delay_state == counting) npress_delay = press_delay + 1'b1; // waiting state when delay_state == 1
-	else if(delay_state == done) ndone_delay = done_delay + 1'b1;
-end
-
-//next press delay state assignment logic
-always@(*) begin
-ndelay_state = delay_state;
-	case(delay_state)
-		idle: if(makeBreak) ndelay_state = counting;
-		counting: if(press_delay == 0) ndelay_state = done;
-		done: if((done_delay == {sw[8:1], 12'hfff})) ndelay_state = idle; //if(done_delay == 16'hffff) ndelay_state = idle;
-		default: ndelay_state = delay_state;
-	endcase
-end
-
-
-
+wire move_right;
 keyboard_press_driver keyboard_driver(clk, valid, makeBreak, scan_code, PS2_DAT, PS2_CLK, reset);
 
 // shift key logic instantiation
@@ -239,10 +179,46 @@ dual_port_ram_sync ROM
  
 font_rom   look_UP_table(.clk(clk),      //input wire clk,
 								 .addr({B,py[3:0]} ),   //input wire [10:0] addr,
-								 //.addr({scan_code[6:0],py[3:0]}),
 								 .data(bits)  );//output reg [7:0] data
 
 endmodule
+//==================================================================================
+module pressed(input wire clk,
+					input wire reset,
+					input wire ready,
+					input wire done,
+					output reg out);
+
+reg [9:0] step,nstep;
+
+always  @(posedge clk)
+begin 
+ if(reset) step<=0;
+ else  step<=nstep;
+end
+
+//initial step=0;
+always @(*)
+begin
+out=0;
+nstep=step; 
+	case(step)
+	10'd0: if(ready) nstep=1;
+	10'd1: if(ready) nstep=2;
+	10'd2: if(ready) nstep=3;
+	10'd3: if(ready) nstep=4;
+	10'd4: if(ready) nstep=5;
+	10'd5: if(ready) nstep=6;
+	10'd6:	begin  
+					nstep=0;
+					out=1;
+			end
+	default: nstep=0;		
+	endcase 
+
+end
+
+endmodule 
 //=====================================================
 module cursor_position(input wire clk,
 							  input wire reset,
@@ -395,6 +371,8 @@ left=0;
 enter=0;
 back=0;
 shift=0;
+display =0;
+
 	  if(in[7]==1) bs=1;
 else if(	8'h59==in || 8'h12==in) shift=1;	 
 else if(8'h75==in) up=1;
@@ -405,55 +383,55 @@ else if(8'h5a==in) enter=1;
 else if(8'h66==in) back=1;
 	else if(uppercase) begin
 		case(in)
-			8'h1C: display <= 8'h41; //A
-          8'h32: display <= 8'h42; //B
-          8'h21: display <= 8'h43; //C
-          8'h23: display <= 8'h44; //D
-          8'h24: display <= 8'h45; //E
-          8'h2B: display <= 8'h46; //F
-          8'h34: display <= 8'h47; //G
-          8'h33: display <= 8'h48; //H
-          8'h43: display <= 8'h49; //I
-          8'h3B: display <= 8'h4A; //J
-          8'h42: display <= 8'h4B; //K
-          8'h4B: display <= 8'h4C; //L
-          8'h3A: display <= 8'h4D; //M
-          8'h31: display <= 8'h4E; //N
-          8'h44: display <= 8'h4F; //O
-          8'h4D: display <= 8'h50; //P
-          8'h15: display <= 8'h51; //Q
-          8'h2D: display <= 8'h52; //R
-          8'h1B: display <= 8'h53; //S
-          8'h2C: display <= 8'h54; //T
-          8'h3C: display <= 8'h55; //U
-          8'h2A: display <= 8'h56; //V
-          8'h1D: display <= 8'h57; //W
-          8'h22: display <= 8'h58; //X
-          8'h35: display <= 8'h59; //Y
-          8'h1A: display <= 8'h5A; //Z
+			8'h1C: display = 8'h41; //A
+          8'h32: display = 8'h42; //B
+          8'h21: display = 8'h43; //C
+          8'h23: display = 8'h44; //D
+          8'h24: display = 8'h45; //E
+          8'h2B: display = 8'h46; //F
+          8'h34: display = 8'h47; //G
+          8'h33: display = 8'h48; //H
+          8'h43: display = 8'h49; //I
+          8'h3B: display = 8'h4A; //J
+          8'h42: display = 8'h4B; //K
+          8'h4B: display = 8'h4C; //L
+          8'h3A: display = 8'h4D; //M
+          8'h31: display = 8'h4E; //N
+          8'h44: display = 8'h4F; //O
+          8'h4D: display = 8'h50; //P
+          8'h15: display = 8'h51; //Q
+          8'h2D: display = 8'h52; //R
+          8'h1B: display = 8'h53; //S
+          8'h2C: display = 8'h54; //T
+          8'h3C: display = 8'h55; //U
+          8'h2A: display = 8'h56; //V
+          8'h1D: display = 8'h57; //W
+          8'h22: display = 8'h58; //X
+          8'h35: display = 8'h59; //Y
+          8'h1A: display = 8'h5A; //Z
 			 //number key row
-			 8'h16: display <= 8'h21; //!
-          8'h52: display <= 8'h22; //"
-          8'h26: display <= 8'h23; //#
-          8'h25: display <= 8'h24; //$
-          8'h2E: display <= 8'h25; //%
-          8'h3D: display <= 8'h26; //&              
-          8'h46: display <= 8'h28; //(
-          8'h45: display <= 8'h29; //)
-          8'h3E: display <= 8'h2A; //*
-          8'h55: display <= 8'h2B; //+
-          8'h4C: display <= 8'h3A; //:
-          8'h41: display <= 8'h3C; //<
-          8'h49: display <= 8'h3E; //>
-          8'h4A: display <= 8'h3F; //?
-          8'h1E: display <= 8'h40; //@
-          8'h36: display <= 8'h5E; //^
-          8'h4E: display <= 8'h5F; //_
-          8'h54: display <= 8'h7B; //{
-          8'h5D: display <= 8'h7C; //|
-          8'h5B: display <= 8'h7D; //}
-          8'h0E: display <= 8'h7E; //~
-			 default: display <= 8'h00;
+			 8'h16: display = 8'h21; //!
+          8'h52: display = 8'h22; //"
+          8'h26: display = 8'h23; //#
+          8'h25: display = 8'h24; //$
+          8'h2E: display = 8'h25; //%
+          8'h3D: display = 8'h26; //&              
+          8'h46: display = 8'h28; //(
+          8'h45: display = 8'h29; //)
+          8'h3E: display = 8'h2A; //*
+          8'h55: display = 8'h2B; //+
+          8'h4C: display = 8'h3A; //:
+          8'h41: display = 8'h3C; //<
+          8'h49: display = 8'h3E; //>
+          8'h4A: display = 8'h3F; //?
+          8'h1E: display = 8'h40; //@
+          8'h36: display = 8'h5E; //^
+          8'h4E: display = 8'h5F; //_
+          8'h54: display = 8'h7B; //{
+          8'h5D: display = 8'h7C; //|
+          8'h5B: display = 8'h7D; //}
+          8'h0E: display = 8'h7E; //~
+			 default: display = 8'h00;
 		endcase
 	end else begin // not uppercase
 		case (in)
@@ -588,7 +566,6 @@ default stat= initi;
 endcase	
 
 print=0;
-//( ( (px-nbx)*(px-nbx)+(py-nby)*(py-nby)  )< (32*32)   )
 if( ( (px-nbx)*(px-nbx)+(py-nby)*(py-nby)  )< (16*16)   )
 	print=1;
 
