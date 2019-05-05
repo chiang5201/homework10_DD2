@@ -44,7 +44,7 @@ vesasync pix00(
     .pixel_y(py)  // pixel Y coordinate
 );	
 		
-wire back,at;
+wire chat,cursor;
 
 						
 show back_ground( 
@@ -53,18 +53,18 @@ show back_ground(
 			.reset(reset),
 			.px(px),
 		   .py(py),
-			.out(back),
+			.out(chat),
 			.sw(SW),//<== testing input
-			.cursor(at),
+			.cursor(cursor),
 			.PS2_DAT(PS2_DAT),
 			.PS2_CLK(PS2_CLK),
 			.LEDR(LEDR)
 			);
 						
 						
-	assign VGA_B =	 (back) ? 8'hff:8'h0;//ball 
-   assign VGA_R = (back)?8'hff:8'h0;//char
-   assign VGA_G = (back|at)?8'hff:8'h0;//( (~VGA_R)&1'b1&back) ? 8'hff:8'h0;
+	assign VGA_B =	(chat|cursor) ? 8'hff:8'h0;//ball 
+   assign VGA_R = (chat|cursor)?8'hff:8'h0;//char
+   assign VGA_G = (chat|cursor)?8'hff:8'h0;//( (~VGA_R)&1'b1&back) ? 8'hff:8'h0;
 	
 	
 	
@@ -491,89 +491,7 @@ end
 				
 
 endmodule 
-//====================================================
-module mover_ball(input  wire clk, 
-						input  wire reset,
-						input  wire [10:0] px,
-						input  wire [10:0] py, 
-						output wire color);
 
-localparam initi=0, upr=1, upl=2, downr=3, downl=4;
-reg[10:0] bx, by, nbx, nby;
-reg[ 2:0] stat,nstat;
-						
-always @(posedge clk)
-begin
-	if(reset)
-	begin
-		bx<=512;
-		by<=384;
-		stat<=0;
-	end
-	else if(px==1328 && py==805)
-	begin
-		stat<=nstat;
-		bx<=nbx;
-		by<=nby;
-	end
-end	
-
-reg print;
-
-always @(*)
-begin
-nbx=bx;
-nby=by;
-nstat=stat;
- 
-case(stat)	
-initi:begin
-nstat=downr;
-end
-upr:begin
-nby=by-1;
-nbx=bx+1;
-	if(nby==16)
-		nstat=downr;
-   else if(nbx==1007)
-		nstat=upl;
-end
-upl:begin
-nby=by-1;
-nbx=bx-1;
-	if(nby==16)
-		nstat=downl;
-	else if(nbx==16)
-		nstat=upr;
-end
-downr:begin
-nby=by+1;
-nbx=bx+1;
-	if(nby==751)
-		nstat=upr;
-	else if(nbx==1007)
-		nstat=downl;
-end
-downl:begin
-nby=by+1;
-nbx=bx-1;
-	if(nby==751)
-		nstat=upl;
-	else if(nbx== 16)
-		nstat=downr;
-end
-default stat= initi;
-endcase	
-
-print=0;
-if( ( (px-nbx)*(px-nbx)+(py-nby)*(py-nby)  )< (16*16)   )
-	print=1;
-
-end	
-	
-assign color= print;
-	
-endmodule
 //______________________SHIFT KEY LOGIC____________________
 // This module watches the scan code and uses an FSM to decide whether 
 // or not output should be uppercase/special characters
